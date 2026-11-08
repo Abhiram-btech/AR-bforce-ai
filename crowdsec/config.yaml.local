@@ -1,0 +1,9 @@
+# Merged on top of /etc/crowdsec/config.yaml by CrowdSec (".local" override file).
+# Purpose: no requests to CrowdSec's servers at runtime.
+cscli:
+  # A fixed hub branch stops cscli from asking https://version.crowdsec.net/latest
+  # which version is newest (it does that whenever hub_branch is empty).
+  hub_branch: v1.7.0
+  # Hub downloads (default https://cdn-hub.crowdsec.net/...) go to a dead local port,
+  # so any accidental "cscli hub update/upgrade/install" fails instead of downloading.
+  __hub_url_template__: "http://127.0.0.1:9/hub-downloads-disabled/%s/%s"

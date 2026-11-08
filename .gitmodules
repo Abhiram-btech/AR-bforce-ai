@@ -1,0 +1,6 @@
+[submodule "vendor/crowdsec"]
+	path = vendor/crowdsec
+	url = https://github.com/crowdsecurity/crowdsec
+[submodule "vendor/hub"]
+	path = vendor/hub
+	url = https://github.com/crowdsecurity/hub

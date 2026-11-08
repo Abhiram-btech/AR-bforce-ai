@@ -18,13 +18,18 @@ services:
     restart: unless-stopped
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.7.0  # pinned version; upgrade deliberately, not by accident
+    build:
+      context: ./vendor/crowdsec          # our own copy of CrowdSec v1.7.0 (git submodule), built with its own Dockerfile
+      args:
+        BUILD_VERSION: v1.7.0
+    image: bforce/crowdsec:v1.7.0
     container_name: crowdsec
     depends_on:
       - login-app                         # login app creates auth.log first
     environment:
       BOUNCER_KEY_loginapp: ${CROWDSEC_BOUNCER_KEY}   # registers the login app as a bouncer
-      DISABLE_ONLINE_API: "true"                      # keep test data local
+      DISABLE_ONLINE_API: "true"                      # keep test data local; no registration with CrowdSec's online API
+      NO_HUB_UPGRADE: "true"                          # entrypoint: skip "cscli hub upgrade" on startup
     volumes:
       - logs:/logs:ro
       - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
@@ -33,11 +38,12 @@ services:
       - ./crowdsec/scenarios/login-bf.yaml:/etc/crowdsec/scenarios/bforce-login-bf.yaml:ro
       - ./crowdsec/scenarios/login-spray.yaml:/etc/crowdsec/scenarios/bforce-login-spray.yaml:ro
       - ./crowdsec/scenarios/login-slow.yaml:/etc/crowdsec/scenarios/bforce-login-slow.yaml:ro
-      - crowdsec-config:/etc/crowdsec
+      - ./crowdsec/config.yaml.local:/etc/crowdsec/config.yaml.local:ro   # fixed hub branch + hub downloads disabled
+      # No volume on /etc/crowdsec: the entrypoint runs "cscli hub update" whenever the hub
+      # index lives in a volume. The config is re-created from the image on each container create.
       - crowdsec-data:/var/lib/crowdsec/data
     restart: unless-stopped
 
 volumes:
   logs:
-  crowdsec-config:
   crowdsec-data:

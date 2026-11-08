@@ -1,0 +1,12 @@
+# Low-and-slow: same as login-bf but a much bigger, slower bucket.
+# Holds 30 failures, leaks 1 every 2 minutes; catches attackers who pace themselves under login-bf.
+type: leaky
+name: bforce/login-slow
+description: "Slow, steady failed logins from one IP (low-and-slow)"
+filter: "evt.Meta.log_type == 'bforce_login' && evt.Meta.result in ['fail', 'throttled']"
+groupby: evt.Meta.source_ip
+capacity: 30
+leakspeed: 2m
+blackhole: 1m
+labels:
+  remediation: true

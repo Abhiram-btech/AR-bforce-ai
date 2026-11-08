@@ -9,6 +9,7 @@ import json
 import os
 import threading
 import time
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 import requests
@@ -20,6 +21,16 @@ TEST_MODE = os.environ.get("TEST_MODE") == "1"
 CROWDSEC_URL = os.environ.get("CROWDSEC_URL", "http://crowdsec:8080")
 BOUNCER_KEY = os.environ.get("CROWDSEC_BOUNCER_KEY", "")
 CACHE_SECONDS = 2.0  # how long a ban/no-ban answer is reused
+
+# Account throttling (Step 2): slows down attacks on ONE account from MANY IPs.
+# It only delays responses; it never bans and never locks the account.
+THROTTLE_WINDOW = 15 * 60   # count failures per username over the last 15 minutes
+THROTTLE_AFTER = 5          # start delaying once this many failures are in the window
+THROTTLE_MAX_DELAY = 30.0   # seconds; 1s, 2s, 4s, ... capped here
+# Only throttle when the failures come from at least this many DIFFERENT IPs. Single-IP attacks
+# are left to CrowdSec, which bans them in ~2s; throttling them would slow the ban down.
+THROTTLE_MIN_IPS = int(os.environ.get("THROTTLE_MIN_IPS", "3"))
+THROTTLE_MAX_USERS = 10_000  # usernames are attacker-controlled: bound memory
 
 # Fake demo users. Passwords are hashed at startup; never store plain text in real apps.
 DEMO_USERS = {
@@ -37,6 +48,8 @@ app = Flask(__name__)
 _log_lock = threading.Lock()
 _cache = {}
 _cache_lock = threading.Lock()
+_fails = defaultdict(deque)  # username -> deque of (monotonic time, ip) of recent failures
+_fails_lock = threading.Lock()
 
 
 def client_ip():
@@ -51,14 +64,16 @@ def client_ip():
     return request.remote_addr or "0.0.0.0"
 
 
-def log_attempt(ip, user, result):
+def log_attempt(ip, user, result, delay=0.0):
     line = {
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "ip": ip,
         "user": (user or "")[:64],  # attacker-controlled: keep it short
-        "result": result,           # success | fail | blocked
+        "result": result,           # success | fail | throttled (failed + delayed) | blocked
         "ua": (request.headers.get("User-Agent") or "")[:128],
     }
+    if delay:
+        line["delay"] = round(delay, 1)
     with _log_lock, open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(line) + "\n")
 
@@ -86,6 +101,42 @@ def is_banned(ip):
     with _cache_lock:
         _cache[ip] = (now, banned)
     return banned
+
+
+def _prune(q, now):
+    while q and now - q[0][0] > THROTTLE_WINDOW:
+        q.popleft()
+
+
+def throttle_delay(user):
+    """Seconds to delay a login for this username (0 = no delay)."""
+    now = time.monotonic()
+    with _fails_lock:
+        q = _fails.get(user)
+        if not q:
+            return 0.0
+        _prune(q, now)
+        n = len(q)
+        if n < THROTTLE_AFTER or len({ip for _, ip in q}) < THROTTLE_MIN_IPS:
+            return 0.0
+    return min(THROTTLE_MAX_DELAY, 2.0 ** (n - THROTTLE_AFTER))
+
+
+def record_failure(user, ip):
+    now = time.monotonic()
+    with _fails_lock:
+        if user not in _fails and len(_fails) >= THROTTLE_MAX_USERS:
+            for u in [u for u, q in _fails.items() if not q or now - q[-1][0] > THROTTLE_WINDOW]:
+                del _fails[u]
+            if len(_fails) >= THROTTLE_MAX_USERS:
+                return  # still full of active entries: skip rather than grow without limit
+        _fails[user].append((now, ip))
+        _prune(_fails[user], now)
+
+
+def reset_failures(user):
+    with _fails_lock:
+        _fails.pop(user, None)
 
 
 PAGE = """<!doctype html><title>BForce demo login</title>
@@ -126,11 +177,18 @@ def login():
         log_attempt(ip, user, "blocked")
         return reply(False, 403, "Too many attempts. Try again later.")
 
+    delay = throttle_delay(user)  # same for known and unknown usernames
+    if delay:
+        time.sleep(delay)
+
     stored = USERS.get(user, DUMMY_HASH)
     ok = check_password_hash(stored, password) and user in USERS
-    log_attempt(ip, user, "success" if ok else "fail")
     if ok:
+        reset_failures(user)
+        log_attempt(ip, user, "success", delay)
         return reply(True, 200, f"Welcome, {user}!")
+    record_failure(user, ip)
+    log_attempt(ip, user, "throttled" if delay else "fail", delay)
     return reply(False, 401, "Wrong username or password.")  # same message for unknown users
 
 

@@ -31,6 +31,8 @@ services:
       - ./crowdsec/parsers/bforce-raw.yaml:/etc/crowdsec/parsers/s00-raw/bforce-raw.yaml:ro    # passes plain lines to s01
       - ./crowdsec/parsers/bforce-logs.yaml:/etc/crowdsec/parsers/s01-parse/bforce-logs.yaml:ro
       - ./crowdsec/scenarios/login-bf.yaml:/etc/crowdsec/scenarios/bforce-login-bf.yaml:ro
+      - ./crowdsec/scenarios/login-spray.yaml:/etc/crowdsec/scenarios/bforce-login-spray.yaml:ro
+      - ./crowdsec/scenarios/login-slow.yaml:/etc/crowdsec/scenarios/bforce-login-slow.yaml:ro
       - crowdsec-config:/etc/crowdsec
       - crowdsec-data:/var/lib/crowdsec/data
     restart: unless-stopped

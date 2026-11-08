@@ -35,7 +35,7 @@ stats = {"logins": 0, "success": 0, "typos": 0, "blocked": 0, "errors": 0}
 def attempt(ip, user, pw):
     r = session.post(args.url, json={"username": user, "password": pw},
                      headers={"X-Sim-IP": ip, "User-Agent": "Mozilla/5.0 (normal-user-sim)"},
-                     timeout=5)
+                     timeout=40)
     if r.status_code == 403:
         stats["blocked"] += 1
     return r.status_code

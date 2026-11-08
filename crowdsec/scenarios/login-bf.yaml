@@ -3,7 +3,7 @@
 type: leaky
 name: bforce/login-bf
 description: "Too many failed logins from one IP"
-filter: "evt.Meta.log_type == 'bforce_login' && evt.Meta.result == 'fail'"
+filter: "evt.Meta.log_type == 'bforce_login' && evt.Meta.result in ['fail', 'throttled']"  # throttled = failed + delayed
 groupby: evt.Meta.source_ip
 capacity: 10
 leakspeed: 3s

@@ -1,0 +1,14 @@
+# Password spraying: one IP failing logins on many DIFFERENT usernames.
+# distinct: repeat failures on the same username don't fill the bucket.
+# The 6th distinct username within the leak window => alert + ban.
+type: leaky
+name: bforce/login-spray
+description: "One IP failing logins across many usernames (password spraying)"
+filter: "evt.Meta.log_type == 'bforce_login' && evt.Meta.result in ['fail', 'throttled']"
+groupby: evt.Meta.source_ip
+distinct: evt.Meta.target_user
+capacity: 5
+leakspeed: 30s
+blackhole: 5m
+labels:
+  remediation: true

@@ -1,0 +1,41 @@
+# BForce AI - Step 1: fake login app (sensor + bouncer) and CrowdSec (detector)
+# Start:  docker compose up -d --build
+# Stop:   docker compose down
+
+services:
+  login-app:
+    build: ./login-app
+    container_name: login-app
+    environment:
+      TEST_MODE: "1"                      # lets simulators fake IPs via X-Sim-IP. NEVER use in production.
+      CROWDSEC_URL: http://crowdsec:8080
+      CROWDSEC_BOUNCER_KEY: ${CROWDSEC_BOUNCER_KEY}
+      LOG_PATH: /logs/auth.log
+    volumes:
+      - logs:/logs
+    ports:
+      - "127.0.0.1:5000:5000"             # only reachable from inside the Codespace / via port forwarding
+    restart: unless-stopped
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.7.0  # pinned version; upgrade deliberately, not by accident
+    container_name: crowdsec
+    depends_on:
+      - login-app                         # login app creates auth.log first
+    environment:
+      BOUNCER_KEY_loginapp: ${CROWDSEC_BOUNCER_KEY}   # registers the login app as a bouncer
+      DISABLE_ONLINE_API: "true"                      # keep test data local
+    volumes:
+      - logs:/logs:ro
+      - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ./crowdsec/parsers/bforce-raw.yaml:/etc/crowdsec/parsers/s00-raw/bforce-raw.yaml:ro    # passes plain lines to s01
+      - ./crowdsec/parsers/bforce-logs.yaml:/etc/crowdsec/parsers/s01-parse/bforce-logs.yaml:ro
+      - ./crowdsec/scenarios/login-bf.yaml:/etc/crowdsec/scenarios/bforce-login-bf.yaml:ro
+      - crowdsec-config:/etc/crowdsec
+      - crowdsec-data:/var/lib/crowdsec/data
+    restart: unless-stopped
+
+volumes:
+  logs:
+  crowdsec-config:
+  crowdsec-data:

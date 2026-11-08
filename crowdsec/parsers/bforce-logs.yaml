@@ -1,0 +1,16 @@
+# Turns each JSON line from auth.log into fields CrowdSec scenarios can use
+name: bforce/login-logs
+description: "Parse BForce login app JSON logs"
+filter: "evt.Line.Labels.type == 'bforce'"
+onsuccess: next_stage
+statics:
+  - parsed: json_ok
+    expression: UnmarshalJSON(evt.Line.Raw, evt.Unmarshaled, "bf")
+  - meta: log_type
+    value: bforce_login
+  - meta: source_ip
+    expression: evt.Unmarshaled.bf.ip
+  - meta: target_user
+    expression: evt.Unmarshaled.bf.user
+  - meta: result
+    expression: evt.Unmarshaled.bf.result

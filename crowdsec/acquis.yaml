@@ -1,0 +1,6 @@
+# Where CrowdSec reads: the login app's log, tagged with type "bforce"
+filenames:
+  - /logs/auth.log
+force_inotify: true
+labels:
+  type: bforce

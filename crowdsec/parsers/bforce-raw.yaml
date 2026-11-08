@@ -1,0 +1,11 @@
+# Stage s00-raw: passes plain (non-syslog) lines tagged "bforce" on to s01-parse.
+# Replaces the hub item crowdsecurity/non-syslog, which does not exist in the CrowdSec hub.
+name: bforce/raw
+description: "Pass raw BForce log lines to the parse stage"
+filter: "evt.Line.Labels.type == 'bforce'"
+onsuccess: next_stage
+statics:
+  - parsed: message
+    expression: evt.Line.Raw
+  - parsed: program
+    expression: evt.Line.Labels.type

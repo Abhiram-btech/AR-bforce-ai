@@ -1,0 +1,12 @@
+# Leaky bucket: one bucket per IP, holds 10 failures, leaks 1 every 3 seconds.
+# Overflow (11th failure arriving faster than the leak) => alert + ban.
+type: leaky
+name: bforce/login-bf
+description: "Too many failed logins from one IP"
+filter: "evt.Meta.log_type == 'bforce_login' && evt.Meta.result == 'fail'"
+groupby: evt.Meta.source_ip
+capacity: 10
+leakspeed: 3s
+blackhole: 1m
+labels:
+  remediation: true
